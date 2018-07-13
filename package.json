@@ -1,0 +1,27 @@
+{
+  "name": "corma",
+  "version": "1.0.0",
+  "description": "COntRibution MAnagement system for Imaigal",
+  "main": "index.js",
+  "dependencies": {
+    "body-parser": "^1.18.3",
+    "cookie-parser": "^1.4.3",
+    "express": "^4.16.3",
+    "multer": "^1.3.1",
+    "nunjucks": "^3.1.3"
+  },
+  "devDependencies": {},
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/vvs29/corma.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/vvs29/corma/issues"
+  },
+  "homepage": "https://github.com/vvs29/corma#readme"
+}
