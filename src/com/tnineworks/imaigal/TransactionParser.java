@@ -26,8 +26,8 @@ public class TransactionParser {
 
     public static void main(String[] args) throws IOException
     {
-        m_transactions = args[1];
-        populateIdentificationMap(args[2]);
+        m_transactions = args[0];
+        populateIdentificationMap(args[1]);
         //System.out.println("Populated Identification Map: " + identificationMap);
         transNameSet = identificationMap.keySet();
         parseTxns();
@@ -40,9 +40,10 @@ public class TransactionParser {
 
         int count = 0;
         while ( (line = br.readLine()) != null) {
-            StringTokenizer st = new StringTokenizer(line, ":");
-            String srcText = st.nextToken().trim();
+            StringTokenizer st = new StringTokenizer(line, ",");
+            String srcText = st.nextToken().trim().replaceAll(" +", " ");;
             String idText = st.nextToken().trim();
+            String memberIdText = st.nextToken().trim();
 
             identificationMap.put(srcText.toLowerCase(), idText);
         }
@@ -71,7 +72,7 @@ public class TransactionParser {
         while ( (line = br.readLine()) != null && line.length() > 0)
         {
             //System.out.println("Processing line: " + line);
-            String[] transLine = line.split(",");
+            String[] transLine = line.replaceAll(" +", " ").split(",");
             //System.out.println("No of tokens: " + transLine.length);
             if (transLine.length == 0) continue;
 
