@@ -1,18 +1,9 @@
 package com.tnineworks.imaigal;
 
-import java.io.BufferedReader;
-import java.io.BufferedWriter;
-import java.io.FileInputStream;
-import java.io.FileNotFoundException;
-import java.io.FileReader;
-import java.io.FileWriter;
-import java.io.IOException;
-import java.io.InputStreamReader;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Set;
-import java.util.StringTokenizer;
-import java.util.TreeMap;
+import java.io.*;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
+import java.util.*;
 
 
 public class TransactionParser {
@@ -20,9 +11,10 @@ public class TransactionParser {
     public static String m_transactions = null;
 
     // Map has transaction remarks as key and Name identification as value
-    private static HashMap<String, String> identificationMap = new HashMap<String, String>();
+    private static HashMap<String, String[]> identificationMap = new HashMap<String, String[]>();
     private static TreeMap<String, String> transAmountMap = new TreeMap<String, String>();
     private static Set<String> transNameSet = new HashSet<String>();
+    private static final String OUTPUTFILE_DEBUG_SPLIT = "-##-";
 
     public static void main(String[] args) throws IOException
     {
@@ -30,8 +22,8 @@ public class TransactionParser {
         populateIdentificationMap(args[1]);
         //System.out.println("Populated Identification Map: " + identificationMap);
         transNameSet = identificationMap.keySet();
-        parseTxns();
-        printMap();
+        parseTxns(args[2]);
+        printMap(args[3]);
     }
 
     private static void populateIdentificationMap(String input) throws IOException {
@@ -45,25 +37,40 @@ public class TransactionParser {
             String idText = st.nextToken().trim();
             String memberIdText = st.nextToken().trim();
 
-            identificationMap.put(srcText.toLowerCase(), idText);
+            identificationMap.put(srcText.toLowerCase(), new String[] {idText, memberIdText});
         }
     }
 
-    private static void printMap()
-    {
-        Set<String> transName = transAmountMap.keySet();
-        for (String name : transName)
-        {
-            System.out.println("" + name + " :   " + transAmountMap.get(name) );
+    private static void printMap(String outputFile) throws IOException {
+        BufferedWriter bw = null;
+        try {
+            bw = new BufferedWriter(new FileWriter(outputFile));
+            String header = "member_id,description,date,bank_trans_id,amount";
+            System.out.println(header);
+            bw.write(header+"\n");
+            Set<String> transName = transAmountMap.keySet();
+            for (String name : transName) {
+                String data = "" + name + "," + transAmountMap.get(name);
+                System.out.println(data);
+                bw.write(data.split(OUTPUTFILE_DEBUG_SPLIT)[0] + "\n");
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        } finally {
+            if (bw != null) {
+                bw.close();
+            }
         }
     }
 
     // 0 based index
+    static int COL_BANK_TRANS_ID = 0;
+    static int COL_VALUE_DATE = 1;
     static int COL_DESC = 4;
     static int COL_TYPE = COL_DESC + 1;
     static int COL_AMOUNT = COL_TYPE + 1;
 
-    private static void parseTxns() throws IOException
+    private static void parseTxns(String dateFormat) throws IOException
     {
         BufferedReader br = new BufferedReader(new InputStreamReader(new FileInputStream(m_transactions)));
         String line = null;
@@ -80,6 +87,13 @@ public class TransactionParser {
             if (transType == null || !transType.equals("CR"))
                 continue;
 
+            String transDate = transLine[COL_VALUE_DATE];
+            DateTimeFormatter sourceDateFormat = DateTimeFormatter.ofPattern(dateFormat);
+            DateTimeFormatter destDateFormat = DateTimeFormatter.ISO_LOCAL_DATE;
+            LocalDate ldt = LocalDate.parse(transDate, sourceDateFormat);
+            String formattedDate = ldt.format(destDateFormat).toString();
+
+            String transId = transLine[COL_BANK_TRANS_ID];
             String transDesc = transLine[COL_DESC];
             String transName = transDesc;
             for (String name : transNameSet) {
@@ -101,7 +115,9 @@ public class TransactionParser {
             totalAmount += Integer.parseInt(transAmount);
             if(identificationMap.containsKey(transName.toLowerCase()))
             {
-                String displayName = identificationMap.get(transName.toLowerCase());
+                String[] displayData = identificationMap.get(transName.toLowerCase());
+                String displayName = displayData[0];
+                String displayID = displayData[1];
                 if (transAmountMap.containsKey(displayName)) {
                     int i = 1;
                     for (; transAmountMap.containsKey(displayName+"-"+i);i++);
@@ -110,11 +126,12 @@ public class TransactionParser {
                     //System.out.println("Overwriting: ["+displayName+"] " + transAmountMap.get(displayName));
                 }
                 //System.out.println("putting ["+displayName+", "+transAmount+"]");
-                transAmountMap.put(displayName, transAmount);
+                transAmountMap.put(displayID + "," + transDesc + "," + formattedDate + "," + transId, transAmount
+                        + OUTPUTFILE_DEBUG_SPLIT + displayName);
             }
             else
             {
-                transAmountMap.put("Unknown --> "+transName, transAmount);
+                transAmountMap.put(","+transDesc + "," + formattedDate + "," + transId, transAmount);
             }
         }
         br.close();
