@@ -20,7 +20,7 @@ public class TransactionParser {
     {
         m_transactions = args[0];
         populateIdentificationMap(args[1]);
-        //System.out.println("Populated Identification Map: " + identificationMap);
+        System.out.println("Populated Identification Map: " + identificationMap);
         transNameSet = identificationMap.keySet();
         parseTxns(args[2]);
         printMap(args[3]);
@@ -112,7 +112,12 @@ public class TransactionParser {
             //System.out.println(transName + " :  " + transType + " : " + transAmount);
             int dotIndx = transAmount.indexOf('.');
             if (dotIndx > 0) transAmount = transAmount.substring(0, dotIndx);
-            totalAmount += Integer.parseInt(transAmount);
+            try {
+                totalAmount += Integer.parseInt(transAmount);
+            } catch (NumberFormatException e) {
+                e.printStackTrace();
+                continue;
+            }
             if(identificationMap.containsKey(transName.toLowerCase()))
             {
                 String[] displayData = identificationMap.get(transName.toLowerCase());
