@@ -32,6 +32,7 @@ public class TransactionParser {
 
         int count = 0;
         while ( (line = br.readLine()) != null) {
+            System.out.println(line);
             StringTokenizer st = new StringTokenizer(line, ",");
             String srcText = st.nextToken().trim().replaceAll(" +", " ");;
             String idText = st.nextToken().trim();
