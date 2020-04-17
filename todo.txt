@@ -1,0 +1,21 @@
+App.js - Take the bank transaction file as input and sends it to a server which hosts the corma repo
+
+a new file reader calls transaction identifier to add memberIDs (in future, ML logic to tag unidentified transactions) - this is the response back to App.js
+
+Now each entry here is the inputString and calls Classifier.js (which internally calls the server again to get list of members) - [? when we change page will it again retrieve member list]
+
+when we create a member, call the server to save it in DB and rerender to fetch list of members again from the server
+
+On clicking the Done button in classifier.js show a summary of all transactions
+
+on clicking the continue button send the info to server
+
+in the server, run transaction processor to compute contribution info and then run exporter to send back the report
+
+
+OTHER ITEMS
+allow access to website only after login
+CRUD for contribution plan
+yearly, quarterly, monthly reports
+request management
+separate user roles - member and admin
