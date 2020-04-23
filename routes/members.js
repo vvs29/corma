@@ -6,6 +6,7 @@ const express = require('express'),
 
 var connectDB = () => {
     var conn = db.get();
+    console.log("DEBUG::No connection. Connecting");
     if (conn === null || conn === undefined) {
         db.connect(db.MODE_DEVELOPMENT, function (err) {
             if (err) {
