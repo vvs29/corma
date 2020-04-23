@@ -1,5 +1,9 @@
 package com.tnineworks.imaigal;
 
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
+import com.google.gson.JsonObject;
+
 import java.io.*;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
@@ -15,9 +19,11 @@ public class TransactionParser {
     private static TreeMap<String, String> transAmountMap = new TreeMap<String, String>();
     private static Set<String> transNameSet = new HashSet<String>();
     private static final String OUTPUTFILE_DEBUG_SPLIT = "-##-";
+    private static JsonObject outputJson = null;
 
     public static void main(String[] args) throws IOException
     {
+        outputJson = new JsonObject();
         m_transactions = args[0];
         populateIdentificationMap(args[1]);
         System.out.println("Populated Identification Map: " + identificationMap);
@@ -119,6 +125,11 @@ public class TransactionParser {
                 e.printStackTrace();
                 continue;
             }
+
+            String shortTransactionInfo = transDesc + "," + formattedDate + "," + transId;
+            JsonObject innerObject = new JsonObject();
+            innerObject.addProperty("shortTransactionInfo", shortTransactionInfo + "," + transAmount);
+
             if(identificationMap.containsKey(transName.toLowerCase()))
             {
                 String[] displayData = identificationMap.get(transName.toLowerCase());
@@ -131,16 +142,24 @@ public class TransactionParser {
                     displayName = displayName+"-"+i;
                     //System.out.println("Overwriting: ["+displayName+"] " + transAmountMap.get(displayName));
                 }
+
+                innerObject.addProperty("mid", displayID);
+                innerObject.addProperty("displayName", displayName);
+
                 //System.out.println("putting ["+displayName+", "+transAmount+"]");
-                transAmountMap.put(displayID + "," + transDesc + "," + formattedDate + "," + transId, transAmount
+                transAmountMap.put(displayID + "," + shortTransactionInfo, transAmount
                         + OUTPUTFILE_DEBUG_SPLIT + displayName);
             }
             else
             {
-                transAmountMap.put(","+transDesc + "," + formattedDate + "," + transId, transAmount);
+                transAmountMap.put(","+shortTransactionInfo, transAmount);
             }
+            outputJson.add(line, innerObject);
         }
         br.close();
+        Gson gson = new GsonBuilder().create();
+        System.out.println("-------------------------- Total: " + totalAmount);
+        System.out.println(gson.toJson(outputJson));
         System.out.println("-------------------------- Total: " + totalAmount);
     }
 }
