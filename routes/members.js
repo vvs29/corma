@@ -22,11 +22,8 @@ var connectDB = () => {
 members.get('/',(request, response)=>{
     connectDB();
     membersModel.getMemberList(function (err, memberList) {
-        console.log("Err:" + err);
         let memberListJSON = {};
-        console.log(memberList.length);
         for (var i in memberList) {
-            console.log(memberList[i]);
             let memberInfo = {};
             memberInfo.mid = memberList[i].id;
             memberInfo.fullname = memberList[i].name;

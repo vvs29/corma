@@ -1,15 +1,35 @@
 const express = require('express'),
     api = express.Router();
 var fs = require('fs');
+const {execSync} = require('child_process');
+const { v4: uuidv4 } = require('uuid');
 
-api.post('/process_transactions',(request, response)=>{
+api.post('/process_transactions', (request, response) => {
     response.header('Content-Type', 'text/csv');
     response.header('Content-Disposition', 'attachment; filename="mappings.csv"')
     response.send(request.body.mappings);
 });
 
-api.get('/suggestions',(request, response)=>{
-    var suggestionsJSON = JSON.parse(fs.readFileSync('./blah.json', 'utf8'));
+api.post('/suggestions', (request, response) => {
+    let inputCSV = request.body.csv;
+
+    let workDir = "/tmp/cormaService/" + uuidv4();
+    let createWorkDirOut = execSync('mkdir -p ' + workDir);
+
+
+    let command = "java -jar corma-transaction-identifier/build/artifacts/corma_transaction_identifier_jar/corma-transaction-identifier.jar";
+
+    let inputCSVFile = workDir + "/input.csv";
+
+    let tmpout = execSync('echo ' + JSON.stringify(inputCSV) + ' > ' + inputCSVFile);
+    let identificationMapFile = "corma-transaction-identifier/res/identificationMap.csv";
+    let params = "dd-MM-yyyy " + workDir + "/output.csv";
+    let outputJsonFile = workDir + "/output.json";
+
+    let identifierOut = execSync(command + " " + inputCSVFile + " " + identificationMapFile + " " + params + " " + outputJsonFile);
+
+    var suggestionsJSON = JSON.parse(fs.readFileSync(outputJsonFile, 'utf8'));
+    let deleteWorkDir = execSync('rm -r ' + workDir);
     response.json(suggestionsJSON);
 });
 
