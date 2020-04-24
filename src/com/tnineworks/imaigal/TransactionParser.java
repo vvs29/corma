@@ -20,6 +20,7 @@ public class TransactionParser {
     private static Set<String> transNameSet = new HashSet<String>();
     private static final String OUTPUTFILE_DEBUG_SPLIT = "-##-";
     private static JsonObject outputJson = null;
+    public static final String UTF8_BOM = "\uFEFF";
 
     public static void main(String[] args) throws IOException
     {
@@ -30,6 +31,7 @@ public class TransactionParser {
         transNameSet = identificationMap.keySet();
         parseTxns(args[2]);
         printMap(args[3]);
+        writeMapAsJson(args[4]);
     }
 
     private static void populateIdentificationMap(String input) throws IOException {
@@ -154,12 +156,34 @@ public class TransactionParser {
             {
                 transAmountMap.put(","+shortTransactionInfo, transAmount);
             }
+
+            // cleaning up the starting UTF8 bom character that gets added to the line. causes trouble while writing json
+            if (line.startsWith(UTF8_BOM)) {
+                line = line.substring(1);
+            }
             outputJson.add(line, innerObject);
         }
         br.close();
-        Gson gson = new GsonBuilder().create();
+
         System.out.println("-------------------------- Total: " + totalAmount);
-        System.out.println(gson.toJson(outputJson));
-        System.out.println("-------------------------- Total: " + totalAmount);
+    }
+
+    private static void writeMapAsJson(String jsonPath) {
+        Gson gson = new GsonBuilder().setPrettyPrinting().create();
+        BufferedWriter bw = null;
+        try {
+            bw = new BufferedWriter(new FileWriter(jsonPath));
+            bw.write(gson.toJson(outputJson));
+        } catch (Exception e) {
+            e.printStackTrace();
+        } finally {
+            if (bw != null) {
+                try {
+                    bw.close();
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }
+        }
     }
 }
