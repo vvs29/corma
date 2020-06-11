@@ -18,6 +18,7 @@ app.get('/', function (req, res) {
 app.use('/user',require('./routes/members.js'));
 
 app.use(express.json());
+app.use('/transaction_identifier',require('./routes/transactionIdentifer.js'));
 app.use('/api',require('./routes/api.js'));
 
 var server = app.listen(8081, function () {

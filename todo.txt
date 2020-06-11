@@ -19,3 +19,5 @@ CRUD for contribution plan
 yearly, quarterly, monthly reports
 request management
 separate user roles - member and admin
+
+unselect radio if dropdown is changed
