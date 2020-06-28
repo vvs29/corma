@@ -54,14 +54,20 @@ public class TransactionParser {
         BufferedWriter bw = null;
         try {
             bw = new BufferedWriter(new FileWriter(outputFile));
-            String header = "member_id,description,date,bank_trans_id,amount";
+            String header = "name,member_id,description,date,bank_trans_id,amount";
             System.out.println(header);
             bw.write(header+"\n");
             Set<String> transName = transAmountMap.keySet();
-            for (String name : transName) {
-                String data = "" + name + "," + transAmountMap.get(name);
-                System.out.println(data);
-                bw.write(data.split(OUTPUTFILE_DEBUG_SPLIT)[0] + "\n");
+            for (String transLine : transName) {
+                String[] splitted = transAmountMap.get(transLine).split(OUTPUTFILE_DEBUG_SPLIT);
+                String consoleData = null;
+                if (splitted.length > 1) {
+                    consoleData = splitted[1] + ",,,,," + splitted[0];
+                } else {
+                    consoleData = "," + transLine + "," + transAmountMap.get(transLine);
+                }
+                System.out.println(consoleData);
+                bw.write(consoleData + "\n");
             }
         } catch (Exception e) {
             e.printStackTrace();
@@ -85,16 +91,43 @@ public class TransactionParser {
         String line = null;
 
         int totalAmount = 0;
+        int spentAmount = 0;
         while ( (line = br.readLine()) != null && line.length() > 0)
         {
             //System.out.println("Processing line: " + line);
+            // TODO Hacky "MADHESWARAN R,K" in the description is affecting the tokenizer with ","
+            line = line.replace("MADHESWARAN R,K", "MADHESWARAN R");
+            line = line.replace("POONGOTHAI M, S", "Poongothai Sunsundar");
+
             String[] transLine = line.replaceAll(" +", " ").split(",");
             //System.out.println("No of tokens: " + transLine.length);
             if (transLine.length == 0) continue;
 
             String transType = transLine[COL_TYPE];
-            if (transType == null || !transType.equals("CR"))
+            String transDesc = transLine[COL_DESC];
+            Integer transAmount = processTransAmount(transLine[COL_AMOUNT], transLine);
+            if (transAmount == null) {
+                // bad amount field. skip the transaction
                 continue;
+            }
+
+            if (transType == null || !transType.equals("CR")){
+                // Transfers to beneficieries
+                //System.out.println("---------------------------- " + transDesc);
+                if (transDesc.contains("NEFT RTN")) {
+                    // don't do anything
+                } else if (transDesc.contains("NEFT")) {
+                    //transDesc = transDesc.substring(transDesc.lastIndexOf('/') + 1);
+                    transDesc = transDesc.substring(34, transDesc.indexOf('/', 34));
+                } else {
+                    // Ignore "MMT/IMPS/929909608999/"
+                    transDesc = transDesc.substring(22, transDesc.indexOf('/', 22));
+                }
+
+                System.out.println(transDesc + " # " + transAmount);
+                spentAmount += transAmount;
+                continue;
+            }
 
             String transDate = transLine[COL_VALUE_DATE];
             DateTimeFormatter sourceDateFormat = DateTimeFormatter.ofPattern(dateFormat);
@@ -103,7 +136,6 @@ public class TransactionParser {
             String formattedDate = ldt.format(destDateFormat).toString();
 
             String transId = transLine[COL_BANK_TRANS_ID];
-            String transDesc = transLine[COL_DESC];
             String transName = transDesc;
             for (String name : transNameSet) {
                 if (transDesc.toLowerCase().contains(name)) {
@@ -112,26 +144,11 @@ public class TransactionParser {
                 }
             }
 
-            String transAmount = transLine[COL_AMOUNT];
-            if (transAmount.startsWith("\"")) {
-                transAmount = transAmount + transLine[COL_AMOUNT + 1];
-                transAmount = transAmount.replace("\"", "");
-            }
-
-            //System.out.println(transName + " :  " + transType + " : " + transAmount);
-            int dotIndx = transAmount.indexOf('.');
-            if (dotIndx > 0) transAmount = transAmount.substring(0, dotIndx);
-            try {
-                totalAmount += Integer.parseInt(transAmount);
-            } catch (NumberFormatException e) {
-                e.printStackTrace();
-                continue;
-            }
-
             String shortTransactionInfo = transDesc + "," + formattedDate + "," + transId;
             JsonObject innerObject = new JsonObject();
             innerObject.addProperty("shortTransactionInfo", shortTransactionInfo + "," + transAmount);
 
+            totalAmount += transAmount;
             if(identificationMap.containsKey(transName.toLowerCase()))
             {
                 String[] displayData = identificationMap.get(transName.toLowerCase());
@@ -154,7 +171,7 @@ public class TransactionParser {
             }
             else
             {
-                transAmountMap.put(","+shortTransactionInfo, transAmount);
+                transAmountMap.put(","+shortTransactionInfo, transAmount.toString());
             }
 
             // cleaning up the starting UTF8 bom character that gets added to the line. causes trouble while writing json
@@ -165,7 +182,25 @@ public class TransactionParser {
         }
         br.close();
 
+        System.out.println("-------------------------- Total Spent: " + spentAmount);
         System.out.println("-------------------------- Total: " + totalAmount);
+    }
+
+    private static Integer processTransAmount(String transAmount, String[] transLine) {
+        if (transAmount.startsWith("\"")) {
+            transAmount = transAmount + transLine[COL_AMOUNT + 1];
+            transAmount = transAmount.replace("\"", "");
+        }
+
+        //System.out.println(transName + " :  " + transType + " : " + transAmount);
+        int dotIndx = transAmount.indexOf('.');
+        if (dotIndx > 0) transAmount = transAmount.substring(0, dotIndx);
+        try {
+            return Integer.parseInt(transAmount);
+        } catch (NumberFormatException e) {
+            e.printStackTrace();
+            return null;
+        }
     }
 
     private static void writeMapAsJson(String jsonPath) {
