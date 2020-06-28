@@ -17,6 +17,7 @@ public class TransactionParser {
     // Map has transaction remarks as key and Name identification as value
     private static HashMap<String, String[]> identificationMap = new HashMap<String, String[]>();
     private static TreeMap<String, String> transAmountMap = new TreeMap<String, String>();
+    private static TreeMap<String, String> spentAmountMap = new TreeMap<String, String>();
     private static Set<String> transNameSet = new HashSet<String>();
     private static final String OUTPUTFILE_DEBUG_SPLIT = "-##-";
     private static JsonObject outputJson = null;
@@ -30,8 +31,8 @@ public class TransactionParser {
         System.out.println("Populated Identification Map: " + identificationMap);
         transNameSet = identificationMap.keySet();
         parseTxns(args[2]);
-        printMap(args[3]);
-        writeMapAsJson(args[4]);
+        printMap(args[3], args[4]);
+        writeMapAsJson(args[5]);
     }
 
     private static void populateIdentificationMap(String input) throws IOException {
@@ -50,15 +51,16 @@ public class TransactionParser {
         }
     }
 
-    private static void printMap(String outputFile) throws IOException {
-        BufferedWriter bw = null;
+    private static void printMap(String contributionOutput, String spentOutput) throws IOException {
+        BufferedWriter contributionWriter = null;
+        BufferedWriter spentWriter = null;
         try {
-            bw = new BufferedWriter(new FileWriter(outputFile));
+            contributionWriter = new BufferedWriter(new FileWriter(contributionOutput));
             String header = "name,member_id,description,date,bank_trans_id,amount";
             System.out.println(header);
-            bw.write(header+"\n");
-            Set<String> transName = transAmountMap.keySet();
-            for (String transLine : transName) {
+            contributionWriter.write(header+"\n");
+            Set<String> transLines = transAmountMap.keySet();
+            for (String transLine : transLines) {
                 String[] splitted = transAmountMap.get(transLine).split(OUTPUTFILE_DEBUG_SPLIT);
                 String consoleData = null;
                 if (splitted.length > 1) {
@@ -67,13 +69,25 @@ public class TransactionParser {
                     consoleData = "," + transLine + "," + transAmountMap.get(transLine);
                 }
                 System.out.println(consoleData);
-                bw.write(consoleData + "\n");
+                contributionWriter.write(consoleData + "\n");
+            }
+
+            // now write spent details
+            spentWriter = new BufferedWriter(new FileWriter(spentOutput));
+            header = "transName,amount";
+            spentWriter.write(header+"\n");
+            Set<String> transNames = spentAmountMap.keySet();
+            for (String transName : transNames) {
+                spentWriter.write(transName + "," + spentAmountMap.get(transName) + '\n');
             }
         } catch (Exception e) {
             e.printStackTrace();
         } finally {
-            if (bw != null) {
-                bw.close();
+            if (contributionWriter != null) {
+                contributionWriter.close();
+            }
+            if (spentWriter != null) {
+                spentWriter.close();
             }
         }
     }
@@ -125,6 +139,7 @@ public class TransactionParser {
                 }
 
                 System.out.println(transDesc + " # " + transAmount);
+                spentAmountMap.put(transDesc, transAmount.toString());
                 spentAmount += transAmount;
                 continue;
             }
