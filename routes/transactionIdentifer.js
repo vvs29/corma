@@ -3,7 +3,6 @@ const express = require('express'),
 var fs = require('fs');
 
 transactionIdentifier.post('/add', (request, response) => {
-    console.log(request.body);
     let entry = request.body.entry;
     entry = '\n' + entry;
 
