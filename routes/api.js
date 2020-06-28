@@ -23,7 +23,7 @@ api.post('/suggestions', (request, response) => {
 
     let tmpout = execSync('echo ' + JSON.stringify(inputCSV) + ' > ' + inputCSVFile);
     let identificationMapFile = "corma-transaction-identifier/res/identificationMap.csv";
-    let params = "dd-MM-yyyy " + workDir + "/contrib_output.csv" + workDir + "/spent_output.csv";
+    let params = "dd-MM-yyyy " + workDir + "/contrib_output.csv " + workDir + "/spent_output.csv";
     let outputJsonFile = workDir + "/contrib_output.json";
 
     let identifierOut = execSync(command + " " + inputCSVFile + " " + identificationMapFile + " " + params + " " + outputJsonFile);
