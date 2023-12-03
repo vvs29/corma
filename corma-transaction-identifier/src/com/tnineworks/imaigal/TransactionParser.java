@@ -115,11 +115,19 @@ public class TransactionParser {
 
             String[] transLine = line.replaceAll(" +", " ").split(",");
             //System.out.println("No of tokens: " + transLine.length);
-            if (transLine.length == 0) continue;
+            if (transLine.length < 3) continue;
 
+            String transId = transLine[COL_BANK_TRANS_ID];
+            if (transId.length() <= 0) {
+                continue;
+            }
             String transType = transLine[COL_TYPE];
             String transDesc = transLine[COL_DESC];
-            Integer transAmount = processTransAmount(transLine[COL_AMOUNT], transLine);
+            int amountColumn = COL_AMOUNT;
+            if (transType == null || !transType.equals("CR")){
+                amountColumn += 1;
+            }
+            Integer transAmount = processTransAmount(transLine[amountColumn], transLine);
             if (transAmount == null) {
                 // bad amount field. skip the transaction
                 continue;
@@ -128,14 +136,18 @@ public class TransactionParser {
             if (transType == null || !transType.equals("CR")){
                 // Transfers to beneficieries
                 //System.out.println("---------------------------- " + transDesc);
-                if (transDesc.contains("NEFT RTN")) {
+                if (transDesc.contains("NEFT RTN") || transDesc.contains("INF")) {
                     // don't do anything
                 } else if (transDesc.contains("NEFT")) {
                     //transDesc = transDesc.substring(transDesc.lastIndexOf('/') + 1);
                     transDesc = transDesc.substring(34, transDesc.indexOf('/', 34));
                 } else {
                     // Ignore "MMT/IMPS/929909608999/"
-                    transDesc = transDesc.substring(22, transDesc.indexOf('/', 22));
+                    try {
+                        transDesc = transDesc.substring(22, transDesc.indexOf('/', 22));
+                    } catch (Exception e) {
+                        throw e;
+                    }
                 }
 
                 System.out.println(transDesc + " # " + transAmount);
@@ -150,7 +162,6 @@ public class TransactionParser {
             LocalDate ldt = LocalDate.parse(transDate, sourceDateFormat);
             String formattedDate = ldt.format(destDateFormat).toString();
 
-            String transId = transLine[COL_BANK_TRANS_ID];
             String transName = transDesc;
             for (String name : transNameSet) {
                 if (transDesc.toLowerCase().contains(name)) {
