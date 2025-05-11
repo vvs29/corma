@@ -1,2 +1,7 @@
 node_modules/
 .idea/
+package-lock.json
+*DS_Store
+*.iml
+.vscode
+*.code-workspace
