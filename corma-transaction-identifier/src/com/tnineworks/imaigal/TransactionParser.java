@@ -1,5 +1,20 @@
 package com.tnineworks.imaigal;
 
+/**
+ * TransactionParser - Parses transaction data from CSV files
+ * 
+ * This version includes the following enhancements:
+ * 1. Updated to use Float instead of Integer for transaction amounts for more precision
+ * 2. Updated NEFT parsing index from 34 to 44 for 2025 format changes
+ * 3. Added support for INFT and ONL payment types
+ * 4. Added debug logging capability (enable with "debug" as first argument)
+ * 5. Added support for REV IMPS transaction type
+ * 6. Added N N SRIPRIYA,N name replacement
+ * 7. Improved error handling for transaction description parsing
+ * 8. Auto-detection of date formats (d/M/yy or dd-MM-yyyy) without requiring format parameter
+ * 9. Added Transaction POJO for better encapsulation
+ */
+
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonObject;
@@ -16,39 +31,80 @@ public class TransactionParser {
 
     // Map has transaction remarks as key and Name identification as value
     private static HashMap<String, String[]> identificationMap = new HashMap<String, String[]>();
-    private static TreeMap<String, String> transAmountMap = new TreeMap<String, String>();
+    private static Set<Transaction> transactions = new HashSet<Transaction>();
     private static TreeMap<String, String> spentAmountMap = new TreeMap<String, String>();
     private static Set<String> transNameSet = new HashSet<String>();
-    private static final String OUTPUTFILE_DEBUG_SPLIT = "-##-";
     private static JsonObject outputJson = null;
     public static final String UTF8_BOM = "\uFEFF";
+    private static boolean isDebug = false;
 
     public static void main(String[] args) throws IOException
     {
+        if (args.length > 0 && args[0].equals("debug")) {
+            System.out.println("Debug - Enabled");
+            isDebug = true;
+            // Shift arguments if debug mode is enabled
+            String[] newArgs = new String[args.length - 1];
+            System.arraycopy(args, 1, newArgs, 0, args.length - 1);
+            args = newArgs;
+        }
+        
         outputJson = new JsonObject();
         m_transactions = args[0];
         populateIdentificationMap(args[1]);
-        System.out.println("Populated Identification Map: " + identificationMap);
+        debugLog("Populated Identification Map: " + identificationMap);
         transNameSet = identificationMap.keySet();
-        parseTxns(args[2]);
-        printMap(args[3], args[4]);
-        writeMapAsJson(args[5]);
+        parseTxns();
+        printMap(args[2], args[3]);
+        writeMapAsJson(args[4]);
+    }
+    
+    /**
+     * Logs debug messages if debug mode is enabled
+     */
+    private static void debugLog(String message) {
+        if (isDebug) {
+            System.out.println("[DEBUG] " + message);
+        }
     }
 
+    /**
+     * Populates the identification map from the input file
+     * Supports semicolon-delimited identifiers for the same person
+     * Format: DisplayName,MemberID,Identifier1;Identifier2;Identifier3
+     */
     private static void populateIdentificationMap(String input) throws IOException {
-        BufferedReader br =  new BufferedReader(new FileReader(input));
+        BufferedReader br = new BufferedReader(new FileReader(input));
         String line;
 
-        int count = 0;
-        while ( (line = br.readLine()) != null) {
-            System.out.println(line);
+        while ((line = br.readLine()) != null) {
+            debugLog("ID Map line: " + line);
             StringTokenizer st = new StringTokenizer(line, ",");
-            String srcText = st.nextToken().trim().replaceAll(" +", " ");;
-            String idText = st.nextToken().trim();
-            String memberIdText = st.nextToken().trim();
-
-            identificationMap.put(srcText.toLowerCase(), new String[] {idText, memberIdText});
+            
+            // First token is the display name
+            String displayName = st.nextToken().trim();
+            
+            // Second token is the member ID
+            String memberID = st.hasMoreTokens() ? st.nextToken().trim() : "";
+            
+            // Third token may contain multiple identification texts separated by semicolons
+            if (st.hasMoreTokens()) {
+                String identifiers = st.nextToken().trim();
+                StringTokenizer idTokenizer = new StringTokenizer(identifiers, ";");
+                
+                // Process each identifier
+                while (idTokenizer.hasMoreTokens()) {
+                    String identifier = idTokenizer.nextToken().trim().replaceAll(" +", " ");
+                    debugLog("Adding identifier: " + identifier + " for " + displayName + " (" + memberID + ")");
+                    identificationMap.put(identifier.toLowerCase(), new String[] {displayName, memberID});
+                }
+            } else {
+                // Backward compatibility: if no identifiers specified, use display name as identifier
+                debugLog("No identifiers specified, using display name as identifier: " + displayName);
+                identificationMap.put(displayName.toLowerCase(), new String[] {displayName, memberID});
+            }
         }
+        br.close();
     }
 
     private static void printMap(String contributionOutput, String spentOutput) throws IOException {
@@ -59,16 +115,18 @@ public class TransactionParser {
             String header = "name,member_id,description,date,bank_trans_id,amount";
             System.out.println(header);
             contributionWriter.write(header+"\n");
-            Set<String> transLines = transAmountMap.keySet();
-            for (String transLine : transLines) {
-                String[] splitted = transAmountMap.get(transLine).split(OUTPUTFILE_DEBUG_SPLIT);
-                String consoleData = null;
-                if (splitted.length > 1) {
-                    consoleData = splitted[1] + ",,,,," + splitted[0];
-                } else {
-                    consoleData = "," + transLine + "," + transAmountMap.get(transLine);
-                }
-                System.out.println(consoleData);
+            
+            debugLog("Writing " + transactions.size() + " contribution entries to " + contributionOutput);
+            for (Transaction transaction : transactions) {
+                String displayName = transaction.getDisplayName() != null ? transaction.getDisplayName() : "";
+                String mid = transaction.getMid() != null ? transaction.getMid() : "";
+                String description = transaction.getTransactionDescription();
+                String date = transaction.getTransactionDate();
+                String id = transaction.getTransactionId();
+                Float amount = transaction.getTransactionAmount();
+                
+                String consoleData = displayName + "," + mid + "," + description + "," + date + "," + id + "," + amount;
+                debugLog("Writing contribution: " + consoleData);
                 contributionWriter.write(consoleData + "\n");
             }
 
@@ -76,8 +134,11 @@ public class TransactionParser {
             spentWriter = new BufferedWriter(new FileWriter(spentOutput));
             header = "transName,amount";
             spentWriter.write(header+"\n");
+            
+            debugLog("Writing " + spentAmountMap.size() + " spent entries to " + spentOutput);
             Set<String> transNames = spentAmountMap.keySet();
             for (String transName : transNames) {
+                debugLog("Writing spent: " + transName + "," + spentAmountMap.get(transName));
                 spentWriter.write(transName + "," + spentAmountMap.get(transName) + '\n');
             }
         } catch (Exception e) {
@@ -99,7 +160,11 @@ public class TransactionParser {
     static int COL_TYPE = COL_DESC + 1;
     static int COL_AMOUNT = COL_TYPE + 1;
 
-    private static void parseTxns(String dateFormat) throws IOException
+    /**
+     * Parse transactions from the CSV file
+     * Auto-detects date format (d/M/yy or dd-MM-yyyy)
+     */
+    private static void parseTxns() throws IOException
     {
         BufferedReader br = new BufferedReader(new InputStreamReader(new FileInputStream(m_transactions)));
         String line = null;
@@ -108,13 +173,14 @@ public class TransactionParser {
         int spentAmount = 0;
         while ( (line = br.readLine()) != null && line.length() > 0)
         {
-            //System.out.println("Processing line: " + line);
+            debugLog("Processing line: " + line);
             // TODO Hacky "MADHESWARAN R,K" in the description is affecting the tokenizer with ","
-            line = line.replace("MADHESWARAN R,K", "MADHESWARAN R");
-            line = line.replace("POONGOTHAI M, S", "Poongothai Sunsundar");
+			line = line.replace("MADHESWARAN R,K", "MADHESWARAN R");
+			line = line.replace("POONGOTHAI M, S", "Poongothai Sunsundar");
+			line = line.replace("N N SRIPRIYA,N", "N N SRIPRIYA");
 
             String[] transLine = line.replaceAll(" +", " ").split(",");
-            //System.out.println("No of tokens: " + transLine.length);
+            debugLog("No of tokens: " + transLine.length);
             if (transLine.length < 3) continue;
 
             String transId = transLine[COL_BANK_TRANS_ID];
@@ -127,7 +193,7 @@ public class TransactionParser {
             if (transType == null || !transType.equals("CR")){
                 amountColumn += 1;
             }
-            Integer transAmount = processTransAmount(transLine[amountColumn], transLine);
+            Float transAmount = processTransAmount(transLine[amountColumn], transLine);
             if (transAmount == null) {
                 // bad amount field. skip the transaction
                 continue;
@@ -136,30 +202,52 @@ public class TransactionParser {
             if (transType == null || !transType.equals("CR")){
                 // Transfers to beneficieries
                 //System.out.println("---------------------------- " + transDesc);
-                if (transDesc.contains("NEFT RTN") || transDesc.contains("INF")) {
+                if (transDesc.contains("NEFT RTN") || transDesc.contains("REV IMPS")) {
                     // don't do anything
                 } else if (transDesc.contains("NEFT")) {
-                    //transDesc = transDesc.substring(transDesc.lastIndexOf('/') + 1);
-                    transDesc = transDesc.substring(34, transDesc.indexOf('/', 34));
-                } else {
+                    // Updated index from 34 to 44 for 2025 format
+                    int toStartSearchIndx = 44; // From Jan 2025
+                    int indx = transDesc.indexOf('/', toStartSearchIndx); 
+                    if (indx > 0) {
+                        transDesc = transDesc.substring(toStartSearchIndx, indx);
+                    } else {
+                        transDesc = transDesc.substring(toStartSearchIndx);
+                    }
+                } else if (transDesc.contains("INFT")) {
+                    // Handle INFT transactions (e.g., INF/INFT/032450733261/REDU500 Thrisha/MarudharKesariJ)
+                    int indx = transDesc.indexOf('/', 22);
+                    if (indx > 0) {
+                        transDesc = transDesc.substring(22, indx);
+                    } else {
+                        transDesc = transDesc.substring(22);
+                    }
+                } else if (transDesc.contains("IMPS")) {
                     // Ignore "MMT/IMPS/929909608999/"
                     try {
                         transDesc = transDesc.substring(22, transDesc.indexOf('/', 22));
                     } catch (Exception e) {
                         throw e;
                     }
+                } else {
+                    // Handle ONL payments (e.g., "BIL/ONL/000640078426/AMAZON PAY/REDU487 Adhityn")
+                    try {
+                        int startIndx = transDesc.indexOf('/', 22) + 1;
+                        transDesc = transDesc.substring(startIndx);
+                    } catch (Exception e) {
+                        // If parsing fails, keep the original description
+                        System.out.println("Failed to parse description: " + transDesc);
+                    }
                 }
 
-                System.out.println(transDesc + " # " + transAmount);
+                debugLog("Spent transaction: " + transDesc + " # " + transAmount);
                 spentAmountMap.put(transDesc, transAmount.toString());
                 spentAmount += transAmount;
                 continue;
             }
 
             String transDate = transLine[COL_VALUE_DATE];
-            DateTimeFormatter sourceDateFormat = DateTimeFormatter.ofPattern(dateFormat);
+            LocalDate ldt = parseTransactionDate(transDate);
             DateTimeFormatter destDateFormat = DateTimeFormatter.ISO_LOCAL_DATE;
-            LocalDate ldt = LocalDate.parse(transDate, sourceDateFormat);
             String formattedDate = ldt.format(destDateFormat).toString();
 
             String transName = transDesc;
@@ -170,9 +258,8 @@ public class TransactionParser {
                 }
             }
 
-            String shortTransactionInfo = transDesc + "," + formattedDate + "," + transId;
-            JsonObject innerObject = new JsonObject();
-            innerObject.addProperty("shortTransactionInfo", shortTransactionInfo + "," + transAmount);
+            // Create a Transaction object
+            Transaction transaction = new Transaction(transDesc, formattedDate, transId, transAmount);
 
             totalAmount += transAmount;
             if(identificationMap.containsKey(transName.toLowerCase()))
@@ -180,30 +267,36 @@ public class TransactionParser {
                 String[] displayData = identificationMap.get(transName.toLowerCase());
                 String displayName = displayData[0];
                 String displayID = displayData[1];
-                if (transAmountMap.containsKey(displayName)) {
-                    int i = 1;
-                    for (; transAmountMap.containsKey(displayName+"-"+i);i++);
-                    // if the person made more than one transaction.
-                    displayName = displayName+"-"+i;
-                    //System.out.println("Overwriting: ["+displayName+"] " + transAmountMap.get(displayName));
+                
+                // Check for duplicate display names and append a suffix if needed
+                int i = 1;
+                String originalDisplayName = displayName;
+                while (isDuplicateDisplayName(displayName)) {
+                    displayName = originalDisplayName + "-" + i;
+                    i++;
+                }
+                
+                if (!displayName.equals(originalDisplayName)) {
+                    debugLog("Multiple transactions from same person: ["+displayName+"]");
                 }
 
-                innerObject.addProperty("mid", displayID);
-                innerObject.addProperty("displayName", displayName);
+                transaction.setMid(displayID);
+                transaction.setDisplayName(displayName);
 
-                //System.out.println("putting ["+displayName+", "+transAmount+"]");
-                transAmountMap.put(displayID + "," + shortTransactionInfo, transAmount
-                        + OUTPUTFILE_DEBUG_SPLIT + displayName);
+                debugLog("Credit transaction: ["+displayName+", "+transAmount+"]");
             }
-            else
-            {
-                transAmountMap.put(","+shortTransactionInfo, transAmount.toString());
-            }
+            
+            // Add the transaction to the set
+            transactions.add(transaction);
 
             // cleaning up the starting UTF8 bom character that gets added to the line. causes trouble while writing json
             if (line.startsWith(UTF8_BOM)) {
                 line = line.substring(1);
             }
+            
+            // Convert Transaction object to JsonObject and add to outputJson
+            Gson gson = new Gson();
+            JsonObject innerObject = gson.toJsonTree(transaction).getAsJsonObject();
             outputJson.add(line, innerObject);
         }
         br.close();
@@ -211,21 +304,61 @@ public class TransactionParser {
         System.out.println("-------------------------- Total Spent: " + spentAmount);
         System.out.println("-------------------------- Total: " + totalAmount);
     }
+    
+    /**
+     * Check if a display name already exists in the transactions set
+     */
+    private static boolean isDuplicateDisplayName(String displayName) {
+        for (Transaction t : transactions) {
+            if (displayName.equals(t.getDisplayName())) {
+                return true;
+            }
+        }
+        return false;
+    }
 
-    private static Integer processTransAmount(String transAmount, String[] transLine) {
+    /**
+     * Process transaction amount string to a float value
+     * Updated to use float for more precision
+     */
+    private static Float processTransAmount(String transAmount, String[] transLine) {
         if (transAmount.startsWith("\"")) {
             transAmount = transAmount + transLine[COL_AMOUNT + 1];
             transAmount = transAmount.replace("\"", "");
         }
 
-        //System.out.println(transName + " :  " + transType + " : " + transAmount);
-        int dotIndx = transAmount.indexOf('.');
-        if (dotIndx > 0) transAmount = transAmount.substring(0, dotIndx);
         try {
-            return Integer.parseInt(transAmount);
+            return Float.parseFloat(transAmount);
         } catch (NumberFormatException e) {
             e.printStackTrace();
             return null;
+        }
+    }
+
+    /**
+     * Parse transaction date string to LocalDate
+     * Auto-detects format between d/M/yy and dd-MM-yyyy
+     * 
+     * @param dateStr The date string to parse
+     * @return LocalDate object representing the parsed date
+     */
+    private static LocalDate parseTransactionDate(String dateStr) {
+        // Try d/M/yy format first (e.g., 5/6/25)
+        try {
+            if (dateStr.contains("/")) {
+                DateTimeFormatter formatter = DateTimeFormatter.ofPattern("d/M/yy");
+                return LocalDate.parse(dateStr, formatter);
+            } else if (dateStr.contains("-")) {
+                // Try dd-MM-yyyy format (e.g., 05-06-2025)
+                DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd-MM-yyyy");
+                return LocalDate.parse(dateStr, formatter);
+            } else {
+                // If neither format matches, throw an exception
+                throw new IllegalArgumentException("Unsupported date format: " + dateStr);
+            }
+        } catch (Exception e) {
+            System.err.println("Error parsing date: " + dateStr);
+            throw e;
         }
     }
 
