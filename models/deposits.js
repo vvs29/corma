@@ -1,5 +1,36 @@
 var db = require('../corma-transaction-processor/db.js');
 
+// Function to get deposits with missing member_id
+exports.getUnidentifiedDeposits = function (done) {
+    // Get database connection pool
+    const pool = db.get();
+    
+    // Get a connection from the pool
+    pool.getConnection(function(err, connection) {
+        if (err) {
+            console.error('Error getting connection from pool:', err);
+            return done(err);
+        }
+        
+        // Query to get records with null member_id
+        const query = `SELECT * FROM deposits WHERE member_id IS NULL ORDER BY date DESC`;
+        
+        // Execute the query
+        connection.query(query, function(err, results) {
+            // Release the connection back to the pool
+            connection.release();
+            
+            if (err) {
+                console.error('Error fetching unidentified deposits:', err);
+                return done(err);
+            }
+            
+            // Return the results
+            done(null, results);
+        });
+    });
+};
+
 // Function to update deposits with transaction details
 exports.updateDeposits = function (transactions, done) {
     // Get database connection pool
