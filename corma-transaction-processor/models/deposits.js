@@ -15,15 +15,51 @@ exports.getPlanForMember = function (memberID, done) {
     });
 };
 
-exports.updateStatus = function (depositStatus) {
-    var values = '';
+// Fix 10: Add transaction support
+exports.updateStatus = function (depositStatus, connection, callback) {
     var today = moment(new Date()).format('YYYY-MM-DD');
-    for (var depositID in depositStatus) {
-        var processedAmount = depositStatus[depositID];
-        var query = "update deposits set processed_amount = " + processedAmount + ", last_processed = '" + today + "' where id = " + depositID + ";";
-        db.get().query(query, function (err, rows) {
-            if (err) return console.log("ERROR::Failed to write to contributions table. Error was:" + err + " and query was:" + query);
-        });
+    var queries = [];
+    var queryParams = [];
+    
+    // Fix 3: Add proper error handling
+    try {
+        for (var depositID in depositStatus) {
+            var processedAmount = depositStatus[depositID];
+            var query = "UPDATE deposits SET processed_amount = ?, last_processed = ? WHERE id = ?";
+            queries.push(query);
+            queryParams.push([processedAmount, today, depositID]);
+        }
+        
+        // If no connection is provided, use the default pool
+        const dbConnection = connection || db.get();
+        
+        // Execute all queries
+        var completed = 0;
+        var hasError = false;
+        
+        if (queries.length === 0) {
+            if (callback) callback(null);
+            return;
+        }
+        
+        for (var i = 0; i < queries.length; i++) {
+            dbConnection.query(queries[i], queryParams[i], function(err, result) {
+                if (hasError) return;
+                
+                if (err) {
+                    hasError = true;
+                    if (callback) callback(err);
+                    return;
+                }
+                
+                completed++;
+                if (completed === queries.length && callback) {
+                    callback(null);
+                }
+            });
+        }
+    } catch (err) {
+        if (callback) callback(err);
     }
 };
 

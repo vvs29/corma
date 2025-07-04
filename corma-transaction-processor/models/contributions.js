@@ -8,23 +8,43 @@ exports.getForPlanID = function (planID, done) {
     });
 };
 
-exports.updateContributions = function (contributionEntries) {
+// Fix 10: Add transaction support
+exports.updateContributions = function (contributionEntries, connection, callback) {
     var nEntries = 0;
-    var values = '';
-    for (var planID in contributionEntries) {
-        nEntries++;
-        var contributionDates = contributionEntries[planID];
-        contributionDates.forEach(function (date) {
-            values += "(" + planID + ", '" + date + "'),";
+    var values = [];
+    var placeholders = [];
+    
+    // Fix 3: Add proper error handling
+    try {
+        for (var planID in contributionEntries) {
+            nEntries++;
+            var contributionDates = contributionEntries[planID];
+            contributionDates.forEach(function (date) {
+                values.push(planID, date);
+                placeholders.push("(?, ?)");
+            });
+        }
+        
+        if (nEntries < 1) {
+            if (callback) callback(null);
+            return;
+        }
+        
+        // If no connection is provided, use the default pool
+        const dbConnection = connection || db.get();
+        
+        var query = "INSERT INTO contributions (plan_id, date) VALUES " + placeholders.join(",");
+        dbConnection.query(query, values, function (err, result) {
+            if (err) {
+                if (callback) callback(err);
+                return;
+            }
+            
+            if (callback) callback(null);
         });
-    };
-    if (nEntries < 1) {
-        return;
+    } catch (err) {
+        if (callback) callback(err);
     }
-    var query = "insert into contributions (plan_id, date) values " + values.substring(0, values.length - 1) + ";";
-    db.get().query(query, function (err, rows) {
-        if (err) return console.log("ERROR::Failed to write to contributions table. Error was:" + err + " and query was:" + query);
-    });
 };
 
 var getCutoffDate = function() {
